@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 
 use druid::kurbo::BezPath;
@@ -6,12 +7,20 @@ use druid::piet::{FontFamily, ImageFormat, InterpolationMode, Text, TextLayoutBu
 use druid::widget::{prelude::*, Controller, Painter};
 use druid::{
     Affine, AppLauncher, Color, FontDescriptor, LocalizedString, Point, Rect, TextLayout,
-    WindowDesc, KbKey, WidgetExt, KeyEvent,
+    WindowDesc, KbKey, WidgetExt, KeyEvent, Lens,
 };
 use car_simu_lib::{Map, SCALE};
 
-#[derive(Data)]
-struct Car(car_simu_lib::Car);
+#[derive(Lens, Clone)]
+struct CarState {
+    inner: car_simu_lib::Car
+}
+
+impl Data for CarState {
+    fn same(&self, other: &Self) -> bool {
+        self.lt == other.lt
+    }
+}
 
 struct CustomController;
 

@@ -37,19 +37,28 @@ impl Data for Car {
     }
 }
 
-struct CustomController;
+struct CustomController {
+    down: Option<KbKey>,
+    t: u64,
+    frames: u64,
+    successive: bool,
+}
 
 impl Controller<Car, Painter<Car>> for CustomController {
     fn event(&mut self, child: &mut Painter<Car>, ctx: &mut EventCtx, event: &Event, car: &mut Car, env: &Env) {
         match &event {
             Event::KeyDown(ke) => {
+                if let Some(_) = self.down {
+                    return;
+                }
                 match ke.key {
                     KbKey::ArrowUp => {
-                        // car.forward(0.3);
-                        ctx.request_anim_frame()
+                        self.down = Some(KbKey::ArrowUp);
+                        ctx.request_anim_frame();
                     }
                     KbKey::ArrowDown => {
-                        car.forward(-0.3);
+                        self.down = Some(KbKey::ArrowDown);
+                        ctx.request_anim_frame();
                     }
                     KbKey::ArrowLeft => {
                         car.left_steer();
@@ -60,11 +69,42 @@ impl Controller<Car, Painter<Car>> for CustomController {
                     _ => {}
                 }
             }
+            Event::KeyUp(ke) => {
+                match ke.key {
+                    KbKey::ArrowUp | KbKey::ArrowDown => {
+                        self.down = None;
+                    }
+                    _ => {}
+                }
+            }
+            Event::AnimFrame(t) => {
+                let mut interval = 0;
+                if self.successive {
+                    self.t += t;
+                    interval = *t;
+                    self.frames += 1;
+                } else {
+                    self.successive = true;
+                }
+                match &self.down {
+                    Some(KbKey::ArrowUp) => {
+                        car.forward((interval as f64) * 1e-9 * 1.);
+                        ctx.request_anim_frame();
+                    }
+                    Some(KbKey::ArrowDown) => {
+                        car.forward((interval as f64) * 1e-9 * -1.);
+                        ctx.request_anim_frame();
+                    }
+                    _ => {
+                        self.successive = false;
+                        dbg!((self.frames as f64)/(self.t as f64 * 1e-9));
+                        self.t = 0;
+                        self.frames = 0;
+                    }
+                }
+            }
             Event::WindowConnected => {
                 ctx.request_focus();
-            }
-            Event::AnimFrame(x) => {
-                dbg!(x);
             }
             _ => {}
         }
@@ -80,7 +120,7 @@ fn main() {
                 &Color::GREEN
             );
         })
-        .controller(CustomController {})
+        .controller(CustomController {down: None, t: 0, frames: 0, successive: false})
     ).title("car-simu")
         .resizable(false)
         .window_size((800., 800.));

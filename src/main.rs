@@ -1,19 +1,17 @@
-use std::cell::RefCell;
+use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
-use std::rc::Rc;
+use std::str::FromStr;
 
-use druid::kurbo::BezPath;
-use druid::piet::{FontFamily, ImageFormat, InterpolationMode, Text, TextLayoutBuilder};
-use druid::widget::{prelude::*, Controller, Painter};
+use car_simu_lib::{Map, Source, MAP_HEIGHT, SCALE};
+use druid::kurbo::{BezPath, PathEl};
+use druid::widget::{prelude::*, Controller, Painter, SvgData};
 use druid::{
-    Affine, AppLauncher, Color, FontDescriptor, LocalizedString, Point, Rect, TextLayout,
-    WindowDesc, KbKey, WidgetExt, KeyEvent, Lens,
+    Affine, AppLauncher, Color, KbKey, Vec2, WidgetExt, WindowDesc,
 };
-use car_simu_lib::{Map, SCALE};
 
 #[derive(Clone)]
 struct Car {
-    inner: car_simu_lib::Car
+    inner: car_simu_lib::Car,
 }
 
 impl Deref for Car {
@@ -32,8 +30,66 @@ impl DerefMut for Car {
 
 impl Data for Car {
     fn same(&self, other: &Self) -> bool {
-        self.lt.origin == other.lt.origin && self.lt.rotation_matrix == other.lt.rotation_matrix &&
-        self.rt.origin == other.rt.origin && self.rt.rotation_matrix == other.rt.rotation_matrix
+        self.lt.origin == other.lt.origin
+            && self.lt.rotation_matrix == other.lt.rotation_matrix
+            && self.rt.origin == other.rt.origin
+            && self.rt.rotation_matrix == other.rt.rotation_matrix
+    }
+}
+
+trait View {
+    fn draw(&self, ctx: &mut PaintCtx, env: &mut HashMap<&str, SvgData>);
+}
+
+impl View for car_simu_lib::Rect {
+    fn draw(&self, ctx: &mut PaintCtx, env: &mut HashMap<&str, SvgData>) {
+        match self.source {
+            Source::Color(color) => {
+                let shape = BezPath::from_vec(vec![
+                    PathEl::MoveTo(<(f64, f64)>::from(self.lt().to_real()).into()),
+                    PathEl::LineTo(<(f64, f64)>::from(self.rt().to_real()).into()),
+                    PathEl::LineTo(<(f64, f64)>::from(self.rb().to_real()).into()),
+                    PathEl::LineTo(<(f64, f64)>::from(self.lb().to_real()).into()),
+                    PathEl::ClosePath,
+                ]);
+                ctx.fill(shape, &Color::rgb8(color.r, color.g, color.b));
+            }
+            Source::Svg(data) => {
+                let svg = env.entry(data)
+                    .or_insert_with(|| {
+                        SvgData::from_str(data).unwrap()
+                    });
+                let (ori_width, ori_height) = svg.size().into();
+                let ratio = self.width * SCALE / ori_width;
+                let offset_matrix = Affine::translate(Vec2::new(
+                    self.origin.x * SCALE,
+                    (MAP_HEIGHT - self.origin.y) * SCALE,
+                )) * Affine::FLIP_Y
+                    * Affine::new([
+                        self.rotation_matrix.inner[0][0],
+                        self.rotation_matrix.inner[1][0],
+                        self.rotation_matrix.inner[0][1],
+                        self.rotation_matrix.inner[1][1],
+                        0.,
+                        0.,
+                    ])
+                    * Affine::FLIP_Y
+                    * Affine::scale(ratio)
+                    * Affine::translate(Vec2::new(-ori_width / 2., -ori_height / 2.));
+                svg.to_piet(offset_matrix, ctx)
+            }
+        }
+    }
+}
+
+impl View for car_simu_lib::Car {
+    fn draw(&self, ctx: &mut PaintCtx, env: &mut HashMap<&str, SvgData>) {
+        self.body.draw(ctx, env);
+        self.lt.draw(ctx, env);
+        self.rt.draw(ctx, env);
+        self.lb.draw(ctx, env);
+        self.rb.draw(ctx, env);
+        self.logo.draw(ctx, env);
     }
 }
 
@@ -45,38 +101,38 @@ struct CustomController {
 }
 
 impl Controller<Car, Painter<Car>> for CustomController {
-    fn event(&mut self, child: &mut Painter<Car>, ctx: &mut EventCtx, event: &Event, car: &mut Car, env: &Env) {
+    fn event(
+        &mut self,
+        child: &mut Painter<Car>,
+        ctx: &mut EventCtx,
+        event: &Event,
+        car: &mut Car,
+        env: &Env,
+    ) {
         match &event {
-            Event::KeyDown(ke) => {
-                if let Some(_) = self.down {
-                    return;
+            Event::KeyDown(ke) => match ke.key {
+                KbKey::ArrowUp => {
+                    self.down = Some(KbKey::ArrowUp);
+                    ctx.request_anim_frame();
                 }
-                match ke.key {
-                    KbKey::ArrowUp => {
-                        self.down = Some(KbKey::ArrowUp);
-                        ctx.request_anim_frame();
-                    }
-                    KbKey::ArrowDown => {
-                        self.down = Some(KbKey::ArrowDown);
-                        ctx.request_anim_frame();
-                    }
-                    KbKey::ArrowLeft => {
-                        car.left_steer();
-                    }
-                    KbKey::ArrowRight => {
-                        car.right_steer();
-                    }
-                    _ => {}
+                KbKey::ArrowDown => {
+                    self.down = Some(KbKey::ArrowDown);
+                    ctx.request_anim_frame();
                 }
-            }
-            Event::KeyUp(ke) => {
-                match ke.key {
-                    KbKey::ArrowUp | KbKey::ArrowDown => {
-                        self.down = None;
-                    }
-                    _ => {}
+                KbKey::ArrowLeft => {
+                    car.left_steer();
                 }
-            }
+                KbKey::ArrowRight => {
+                    car.right_steer();
+                }
+                _ => {}
+            },
+            Event::KeyUp(ke) => match ke.key {
+                KbKey::ArrowUp | KbKey::ArrowDown => {
+                    self.down = None;
+                }
+                _ => {}
+            },
             Event::AnimFrame(t) => {
                 let mut interval = 0;
                 if self.successive {
@@ -97,7 +153,7 @@ impl Controller<Car, Painter<Car>> for CustomController {
                     }
                     _ => {
                         self.successive = false;
-                        dbg!((self.frames as f64)/(self.t as f64 * 1e-9));
+                        dbg!((self.frames as f64) / (self.t as f64 * 1e-9));
                         self.t = 0;
                         self.frames = 0;
                     }
@@ -112,21 +168,24 @@ impl Controller<Car, Painter<Car>> for CustomController {
 }
 
 fn main() {
+    let mut draw_env = HashMap::new();
     let window = WindowDesc::new(
-        Painter::new(|ctx, car: &Car, env| {
-            ctx.fill(Rect::from_center_size(
-                <(f64, f64)>::from(car.body.origin.to_real()),
-                (car.body.width*SCALE, car.body.height*SCALE)),
-                &Color::GREEN
-            );
+        Painter::new(move |ctx, car: &Car, env| {
+            // ctx.clear(None, Color::WHITE);
+            car.draw(ctx, &mut draw_env);
         })
-        .controller(CustomController {down: None, t: 0, frames: 0, successive: false})
-    ).title("car-simu")
-        .resizable(false)
-        .window_size((800., 800.));
+        .controller(CustomController {
+            down: None,
+            t: 0,
+            frames: 0,
+            successive: false,
+        }),
+    )
+    .title("car-simu")
+    .resizable(false)
+    .window_size((800., 800.));
     let mut map = car_simu_lib::ParallelParking::new();
     let mut car = map.car();
     AppLauncher::with_window(window)
-        .launch(Car {inner: car});
+        .launch(Car { inner: car });
 }
-

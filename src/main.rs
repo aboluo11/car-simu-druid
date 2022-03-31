@@ -38,11 +38,11 @@ impl Data for Car {
 }
 
 trait View {
-    fn draw(&self, ctx: &mut PaintCtx, env: &mut HashMap<&str, SvgData>);
+    fn draw(&self, ctx: &mut PaintCtx, env: &mut HashMap<*const u8, SvgData>);
 }
 
 impl View for car_simu_lib::Rect {
-    fn draw(&self, ctx: &mut PaintCtx, env: &mut HashMap<&str, SvgData>) {
+    fn draw(&self, ctx: &mut PaintCtx, env: &mut HashMap<*const u8, SvgData>) {
         match self.source {
             Source::Color(color) => {
                 let shape = BezPath::from_vec(vec![
@@ -55,7 +55,7 @@ impl View for car_simu_lib::Rect {
                 ctx.fill(shape, &Color::rgb8(color.r, color.g, color.b));
             }
             Source::Svg(data) => {
-                let svg = env.entry(data)
+                let svg = env.entry(data.as_ptr())
                     .or_insert_with(|| {
                         SvgData::from_str(data).unwrap()
                     });
@@ -83,7 +83,7 @@ impl View for car_simu_lib::Rect {
 }
 
 impl View for car_simu_lib::Car {
-    fn draw(&self, ctx: &mut PaintCtx, env: &mut HashMap<&str, SvgData>) {
+    fn draw(&self, ctx: &mut PaintCtx, env: &mut HashMap<*const u8, SvgData>) {
         self.body.draw(ctx, env);
         self.lt.draw(ctx, env);
         self.rt.draw(ctx, env);

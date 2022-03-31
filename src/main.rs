@@ -171,7 +171,8 @@ fn main() {
     let mut draw_env = HashMap::new();
     let window = WindowDesc::new(
         Painter::new(move |ctx, car: &Car, env| {
-            // ctx.clear(None, Color::WHITE);
+            let region = ctx.size().to_rect();
+            ctx.fill(region, &Color::WHITE);
             car.draw(ctx, &mut draw_env);
         })
         .controller(CustomController {

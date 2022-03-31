@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 
-use car_simu_lib::{Map, Source, MAP_HEIGHT, SCALE};
+use car_simu_lib::{Map, Source, MAP_HEIGHT, SCALE, SPEED};
 use druid::kurbo::{BezPath, PathEl};
 use druid::widget::{prelude::*, Controller, Painter, SvgData};
 use druid::{
@@ -89,6 +89,8 @@ impl View for car_simu_lib::Car {
         self.rt.draw(ctx, env);
         self.lb.draw(ctx, env);
         self.rb.draw(ctx, env);
+        self.left_mirror.draw(ctx, env);
+        self.right_mirror.draw(ctx, env);
         self.logo.draw(ctx, env);
     }
 }
@@ -144,11 +146,11 @@ impl Controller<Car, Painter<Car>> for CustomController {
                 }
                 match &self.down {
                     Some(KbKey::ArrowUp) => {
-                        car.forward((interval as f64) * 1e-9 * 1.);
+                        car.forward((interval as f64) * 1e-9 * SPEED);
                         ctx.request_anim_frame();
                     }
                     Some(KbKey::ArrowDown) => {
-                        car.forward((interval as f64) * 1e-9 * -1.);
+                        car.forward((interval as f64) * 1e-9 * -SPEED);
                         ctx.request_anim_frame();
                     }
                     _ => {

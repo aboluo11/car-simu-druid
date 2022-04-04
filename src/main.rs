@@ -186,8 +186,8 @@ fn main() {
     let mut car = map.car();
     let window = WindowDesc::new(
         Painter::new(move |ctx, car: &Car, env| {
-            let region = ctx.size().to_rect();
-            ctx.fill(region, &Color::WHITE);
+            // let region = ctx.size().to_rect();
+            // ctx.fill(region, &Color::WHITE);
             map.draw(ctx, &mut draw_env);
             car.draw(ctx, &mut draw_env);
         })

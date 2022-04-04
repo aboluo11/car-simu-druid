@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
+use std::sync::Arc;
 
 use car_simu_lib::{Map, Source, MAP_HEIGHT, SCALE, SPEED};
 use druid::kurbo::{BezPath, PathEl};
@@ -95,6 +96,16 @@ impl View for car_simu_lib::Car {
     }
 }
 
+impl View for car_simu_lib::RightAngleTurn {
+    fn draw(&self, ctx: &mut PaintCtx, env: &mut HashMap<*const u8, SvgData>) {
+        let svg = env.entry(self.svg.as_ptr())
+            .or_insert_with(|| {
+                SvgData::from_str(self.svg).unwrap()
+        });
+        svg.to_piet(Affine::IDENTITY, ctx);
+    }
+}
+
 struct CustomController {
     down: Option<KbKey>,
     t: u64,
@@ -171,10 +182,13 @@ impl Controller<Car, Painter<Car>> for CustomController {
 
 fn main() {
     let mut draw_env = HashMap::new();
+    let map = car_simu_lib::RightAngleTurn::new();
+    let mut car = map.car();
     let window = WindowDesc::new(
         Painter::new(move |ctx, car: &Car, env| {
             let region = ctx.size().to_rect();
             ctx.fill(region, &Color::WHITE);
+            map.draw(ctx, &mut draw_env);
             car.draw(ctx, &mut draw_env);
         })
         .controller(CustomController {
@@ -187,8 +201,6 @@ fn main() {
     .title("car-simu")
     .resizable(false)
     .window_size((800., 800.));
-    let mut map = car_simu_lib::ParallelParking::new();
-    let mut car = map.car();
     AppLauncher::with_window(window)
         .launch(Car { inner: car });
 }

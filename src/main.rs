@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
-use std::sync::Arc;
 
-use car_simu_lib::{Map, Source, MAP_HEIGHT, SCALE, SPEED};
-use druid::kurbo::{BezPath, PathEl};
+use car_simu_lib::{Map, Source, MAP_HEIGHT, SCALE, SPEED, distance_of};
+use druid::kurbo::{BezPath, PathEl, Arc, Circle};
 use druid::widget::{prelude::*, Controller, Painter, SvgData};
 use druid::{
     Affine, AppLauncher, Color, KbKey, Vec2, WidgetExt, WindowDesc,
@@ -93,6 +92,22 @@ impl View for car_simu_lib::Car {
         self.left_mirror.draw(ctx, env);
         self.right_mirror.draw(ctx, env);
         self.logo.draw(ctx, env);
+        if let Some(steer_origin) = self.steer_origin() {
+            let biggest_circle_point = match self.steer_angle > 0 {
+                true => self.body.rt(),
+                false => self.body.lt(),
+            };
+            ctx.stroke(
+                Circle::new(<(f64, f64)>::from(steer_origin.to_real()), SCALE*distance_of(steer_origin, biggest_circle_point)),
+                &Color::GREEN,
+                1.,
+            );
+            ctx.stroke(
+                Circle::new(<(f64, f64)>::from(steer_origin.to_real()), SCALE*(distance_of(steer_origin, self.back_origin())-self.body.width/2.)),
+                &Color::GREEN,
+                1.,
+            );
+        }
     }
 }
 
@@ -166,7 +181,7 @@ impl Controller<Car, Painter<Car>> for CustomController {
                     }
                     _ => {
                         self.successive = false;
-                        dbg!((self.frames as f64) / (self.t as f64 * 1e-9));
+                        // dbg!((self.frames as f64) / (self.t as f64 * 1e-9));
                         self.t = 0;
                         self.frames = 0;
                     }
@@ -199,6 +214,7 @@ fn main() {
         }),
     )
     .title("car-simu")
+    .set_position((400., 0.))
     .resizable(false)
     .window_size((800., 800.));
     AppLauncher::with_window(window)
